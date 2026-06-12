@@ -26,8 +26,8 @@ jobs:
       - name: Build and push fixed image
         uses: docker/build-push-action@v5
         with:
-          context: ./cogvideo-fix
-          file: ./cogvideo-fix/Dockerfile.fixed
+          context: .
+          file: ./Dockerfile.fixed
           push: true
           tags: |
             clawsyil/cogvideo-comfyui:fixed
