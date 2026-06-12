@@ -1,7 +1,8 @@
 FROM clawsyil/cogvideo-comfyui:latest
 
 # Move baked models to persistent location (not shadowed by volume mount)
-RUN mkdir -p /models && \
+RUN apt-get update && apt-get install -y rsync && \
+    mkdir -p /models && \
     rsync -a /workspace/ComfyUI/models/ /models/ && \
     rm -rf /workspace/ComfyUI/models && \
     ln -sf /models /workspace/ComfyUI/models
