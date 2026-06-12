@@ -1,0 +1,4 @@
+comfyui:
+  base_path: /workspace/ComfyUI/
+  CogVideo: models/CogVideo/
+  cogvideox_loras: models/CogVideo/loras/
