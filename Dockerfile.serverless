@@ -26,23 +26,17 @@ RUN python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download('op
 # Download ControlNet models
 RUN python3 -c "from huggingface_hub import hf_hub_download; hf_hub_download('TheMistoAI/CogVideoX-ControlNet', 'cogvideox-controlnet-pose.safetensors', local_dir='/models/ControlNet')"
 
-# Stage 2: Runtime - Minimal image with pre-downloaded models
-FROM runpod/base:0.5.0-cuda12.1
+# Stage 2: Runtime - Use pytorch base (smaller than full devel)
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.1-cudnn9-devel AS runtime
 
 # Install runtime dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-pip \
     ffmpeg \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy Python packages from builder
-COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
-COPY --from=builder /usr/local/bin /usr/local/bin
-
-# Copy pre-downloaded models
+# Copy pre-downloaded models from builder
 COPY --from=builder /models /models
 
 # Create symlinks for ComfyUI compatibility
@@ -55,9 +49,8 @@ RUN mkdir -p /workspace/ComfyUI/models && \
 # Set working directory
 WORKDIR /app
 
-# Copy handler and requirements
+# Copy handler
 COPY handler.py /app/handler.py
-COPY requirements.txt /tmp/requirements.txt
 
 # Verify model paths
 RUN ls -la /models/CogVideoX-5b/ && ls -la /models/IPAdapter/ && ls -la /models/CLIP/ && ls -la /models/ControlNet/
