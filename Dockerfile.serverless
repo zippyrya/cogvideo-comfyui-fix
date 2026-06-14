@@ -1,0 +1,76 @@
+# Stage 1: Builder - Install dependencies and download models
+FROM runpod/pytorch:2.4.0-py3.11-cuda12.1-cudnn9-devel AS builder
+
+# Install system dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    git \
+    wget \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+COPY requirements.txt /tmp/requirements.txt
+RUN pip install --no-cache-dir -r /tmp/requirements.txt
+
+# Download CogVideoX-5b model weights at build time
+RUN python -c "
+from huggingface_hub import snapshot_download
+snapshot_download('THUDM/CogVideoX-5b', local_dir='/models/CogVideoX-5b', local_dir_use_symlinks=False)
+"
+
+# Download IPAdapter and CLIP Vision models
+RUN python -c "
+from huggingface_hub import hf_hub_download
+# IPAdapter SDXL
+hf_hub_download('h94/IP-Adapter', 'ipadapter_sdxl.safetensors', local_dir='/models/IPAdapter')
+hf_hub_download('h94/IP-Adapter', 'image_encoder.safetensors', local_dir='/models/IPAdapter')
+# CLIP Vision
+hf_hub_download('openai/clip-vit-large-patch14', 'pytorch_model.bin', local_dir='/models/CLIP', filename='clip_vision_g.safetensors')
+"
+
+# Download ControlNet models
+RUN python -c "
+from huggingface_hub import hf_hub_download
+hf_hub_download('TheMistoAI/CogVideoX-ControlNet', 'cogvideox-controlnet-pose.safetensors', local_dir='/models/ControlNet')
+"
+
+# Stage 2: Runtime - Minimal image with pre-downloaded models
+FROM runpod/base:0.5.0-cuda12.1
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3 \
+    python3-pip \
+    ffmpeg \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy Python packages from builder
+COPY --from=builder /usr/local/lib/python3.11/dist-packages /usr/local/lib/python3.11/dist-packages
+COPY --from=builder /usr/local/bin /usr/local/bin
+
+# Copy pre-downloaded models
+COPY --from=builder /models /models
+
+# Create symlinks for ComfyUI compatibility
+RUN mkdir -p /workspace/ComfyUI/models && \
+    ln -sf /models/CogVideoX-5b /workspace/ComfyUI/models/CogVideo && \
+    ln -sf /models/IPAdapter /workspace/ComfyUI/models/IPAdapter && \
+    ln -sf /models/CLIP /workspace/ComfyUI/models/CLIP && \
+    ln -sf /models/ControlNet /workspace/ComfyUI/models/ControlNet
+
+# Set working directory
+WORKDIR /app
+
+# Copy handler and requirements
+COPY handler.py /app/handler.py
+COPY requirements.txt /tmp/requirements.txt
+
+# Verify model paths
+RUN ls -la /models/CogVideoX-5b/ && ls -la /models/IPAdapter/ && ls -la /models/CLIP/ && ls -la /models/ControlNet/
+
+# RunPod serverless entrypoint
+CMD ["python", "-u", "/app/handler.py"]
